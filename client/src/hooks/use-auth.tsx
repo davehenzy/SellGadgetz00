@@ -54,6 +54,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         title: "Login successful",
         description: `Welcome back, ${user.fullName}!`,
       });
+      
+      // Force page reload to trigger proper routing on the new auth state
+      window.location.href = user.isAdmin ? "/admin" : "/dashboard";
     },
     onError: (error: Error) => {
       toast({
@@ -75,6 +78,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         title: "Registration successful",
         description: `Welcome to SellGadgetz, ${user.fullName}!`,
       });
+      
+      // Redirect to dashboard after registration
+      window.location.href = "/dashboard";
     },
     onError: (error: Error) => {
       toast({
@@ -94,6 +100,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       toast({
         title: "Logged out successfully",
       });
+      
+      // Force page reload and redirect to home page
+      window.location.href = "/";
     },
     onError: (error: Error) => {
       toast({
