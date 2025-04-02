@@ -2,8 +2,16 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth } from "./auth";
-import { insertLaptopSchema, insertRepairSchema, insertInvoiceSchema } from "@shared/schema";
+import { 
+  insertLaptopSchema, 
+  insertRepairSchema, 
+  insertInvoiceSchema,
+  insertChatRoomSchema,
+  insertChatMessageSchema,
+  insertChatParticipantSchema
+} from "@shared/schema";
 import { z } from "zod";
+import { WebSocketServer, WebSocket } from "ws";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup authentication routes
@@ -297,6 +305,226 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Chat Routes
+  app.get("/api/chat/rooms", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const rooms = await storage.getChatRoomsByUserId(req.user.id);
+      res.json(rooms);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch chat rooms" });
+    }
+  });
+
+  app.get("/api/chat/rooms/:id", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const roomId = parseInt(req.params.id);
+      const room = await storage.getChatRoom(roomId);
+      
+      if (!room) {
+        return res.status(404).json({ error: "Chat room not found" });
+      }
+      
+      // Check if user is a participant
+      const participants = await storage.getChatRoomParticipants(roomId);
+      const isParticipant = participants.some((p: {id: number}) => p.id === req.user.id);
+      
+      if (!isParticipant && !req.user.isAdmin) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      
+      res.json(room);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch chat room" });
+    }
+  });
+
+  app.post("/api/chat/rooms", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const roomData = req.body;
+      
+      // Validate and create room
+      const validatedData = insertChatRoomSchema.parse(roomData);
+      const room = await storage.createChatRoom(validatedData);
+      
+      // Add the creator as a participant
+      await storage.addChatParticipant({
+        roomId: room.id,
+        userId: req.user.id
+      });
+      
+      // If this is a support room, add all admins as participants
+      if (room.type === 'support') {
+        const admins = await storage.getAllUsers();
+        const adminUsers = admins.filter(user => user.isAdmin);
+        
+        // Add each admin to the room
+        for (const admin of adminUsers) {
+          if (admin.id !== req.user.id) { // Skip if already added as creator
+            await storage.addChatParticipant({
+              roomId: room.id,
+              userId: admin.id
+            });
+          }
+        }
+      }
+      
+      res.status(201).json(room);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      res.status(500).json({ error: "Failed to create chat room" });
+    }
+  });
+
+  app.get("/api/chat/rooms/:id/messages", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const roomId = parseInt(req.params.id);
+      
+      // Check if user is a participant
+      const participants = await storage.getChatRoomParticipants(roomId);
+      const isParticipant = participants.some((p: {id: number}) => p.id === req.user.id);
+      
+      if (!isParticipant && !req.user.isAdmin) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      
+      const messages = await storage.getChatMessages(roomId);
+      
+      // Mark messages as read
+      await storage.markChatMessagesAsRead(roomId, req.user.id);
+      
+      res.json(messages);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch chat messages" });
+    }
+  });
+
+  app.post("/api/chat/rooms/:id/messages", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const roomId = parseInt(req.params.id);
+      
+      // Check if user is a participant
+      const participants = await storage.getChatRoomParticipants(roomId);
+      const isParticipant = participants.some((p: {id: number}) => p.id === req.user.id);
+      
+      if (!isParticipant && !req.user.isAdmin) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      
+      const messageData = {
+        ...req.body,
+        roomId,
+        userId: req.user.id
+      };
+      
+      const validatedData = insertChatMessageSchema.parse(messageData);
+      const message = await storage.createChatMessage(validatedData);
+      
+      res.status(201).json(message);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      res.status(500).json({ error: "Failed to create chat message" });
+    }
+  });
+
+  app.get("/api/chat/unread", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    
+    try {
+      const count = await storage.getUnreadMessageCount(req.user.id);
+      res.json({ count });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch unread message count" });
+    }
+  });
+
+  // Create HTTP server
   const httpServer = createServer(app);
+  
+  // Set up WebSockets for real-time chat
+  // Use a distinct path for our WebSocket server to avoid conflicts with Vite HMR
+  const wss = new WebSocketServer({ server: httpServer, path: '/api/ws' });
+  
+  // Store connections by userId
+  const clients = new Map();
+  
+  wss.on('connection', (ws, req) => {
+    // At this point, the user must be authenticated
+    // We'll use a token or cookie based mechanism to identify them
+    // For now, we'll use a simple query parameter (in production, you'd use a proper authentication)
+    const url = new URL(req.url || '', 'http://localhost');
+    const userId = url.searchParams.get('userId');
+    
+    if (!userId) {
+      ws.close();
+      return;
+    }
+    
+    // Store the connection
+    if (!clients.has(userId)) {
+      clients.set(userId, new Set());
+    }
+    clients.get(userId).add(ws);
+    
+    ws.on('message', async (messageBuffer) => {
+      try {
+        const messageData = JSON.parse(messageBuffer.toString());
+        
+        // Validate the message
+        if (!messageData.roomId || !messageData.message) {
+          return;
+        }
+        
+        // Store the message
+        const savedMessage = await storage.createChatMessage({
+          roomId: messageData.roomId,
+          userId: parseInt(userId),
+          message: messageData.message
+        });
+        
+        // Get room participants to broadcast the message
+        const participants = await storage.getChatRoomParticipants(messageData.roomId);
+        
+        // Broadcast to all participants
+        participants.forEach(participant => {
+          const participantConnections = clients.get(participant.id.toString());
+          if (participantConnections) {
+            participantConnections.forEach((conn: WebSocket) => {
+              if (conn.readyState === 1) { // OPEN
+                conn.send(JSON.stringify(savedMessage));
+              }
+            });
+          }
+        });
+      } catch (error) {
+        console.error('WebSocket message error:', error);
+      }
+    });
+    
+    ws.on('close', () => {
+      // Remove the connection
+      const userConnections = clients.get(userId);
+      if (userConnections) {
+        userConnections.delete(ws);
+        if (userConnections.size === 0) {
+          clients.delete(userId);
+        }
+      }
+    });
+  });
+  
   return httpServer;
 }

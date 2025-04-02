@@ -1,9 +1,15 @@
-import { users, laptops, repairs, invoices } from "@shared/schema";
-import type { User, InsertUser, Laptop, InsertLaptop, Repair, InsertRepair, Invoice, InsertInvoice } from "@shared/schema";
+import { 
+  users, laptops, repairs, invoices, 
+  chatRooms, chatMessages, chatParticipants
+} from "@shared/schema";
+import type { 
+  User, InsertUser, Laptop, InsertLaptop, Repair, InsertRepair, Invoice, InsertInvoice,
+  ChatRoom, InsertChatRoom, ChatMessage, InsertChatMessage, ChatParticipant, InsertChatParticipant
+} from "@shared/schema";
 import session from "express-session";
 import createMemoryStore from "memorystore";
 import { drizzle } from 'drizzle-orm/node-postgres';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, ne, inArray, asc, count } from 'drizzle-orm';
 import pg from 'pg';
 import connectPg from 'connect-pg-simple';
 import { scrypt, randomBytes } from "crypto";
@@ -53,6 +59,17 @@ export interface IStorage {
   getAllInvoices(): Promise<Invoice[]>;
   createInvoice(invoice: InsertInvoice): Promise<Invoice>;
   updateInvoiceStatus(id: number, status: string): Promise<Invoice | undefined>;
+  
+  // Chat operations
+  getChatRoom(id: number): Promise<ChatRoom | undefined>;
+  getChatRoomsByUserId(userId: number): Promise<ChatRoom[]>;
+  getChatRoomParticipants(roomId: number): Promise<User[]>;
+  createChatRoom(room: InsertChatRoom): Promise<ChatRoom>;
+  addChatParticipant(participant: InsertChatParticipant): Promise<ChatParticipant>;
+  getChatMessages(roomId: number): Promise<ChatMessage[]>;
+  createChatMessage(message: InsertChatMessage): Promise<ChatMessage>;
+  markChatMessagesAsRead(roomId: number, userId: number): Promise<void>;
+  getUnreadMessageCount(userId: number): Promise<number>;
   
   // Session store
   sessionStore: any;
@@ -144,6 +161,29 @@ export class DatabaseStorage implements IStorage {
         repair_id INTEGER REFERENCES repairs(id),
         amount INTEGER NOT NULL,
         status TEXT NOT NULL DEFAULT 'unpaid',
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+      
+      CREATE TABLE IF NOT EXISTS chat_rooms (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        type TEXT NOT NULL DEFAULT 'support',
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+      
+      CREATE TABLE IF NOT EXISTS chat_messages (
+        id SERIAL PRIMARY KEY,
+        room_id INTEGER NOT NULL REFERENCES chat_rooms(id),
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        message TEXT NOT NULL,
+        read BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+      
+      CREATE TABLE IF NOT EXISTS chat_participants (
+        id SERIAL PRIMARY KEY,
+        room_id INTEGER NOT NULL REFERENCES chat_rooms(id),
+        user_id INTEGER NOT NULL REFERENCES users(id),
         created_at TIMESTAMP NOT NULL DEFAULT NOW()
       );
     `);
@@ -287,6 +327,108 @@ export class DatabaseStorage implements IStorage {
       .where(eq(invoices.id, id))
       .returning();
     return result.length > 0 ? result[0] : undefined;
+  }
+
+  // Chat operations
+  async getChatRoom(id: number): Promise<ChatRoom | undefined> {
+    const result = await this.db.select().from(chatRooms).where(eq(chatRooms.id, id));
+    return result.length > 0 ? result[0] : undefined;
+  }
+
+  async getChatRoomsByUserId(userId: number): Promise<ChatRoom[]> {
+    // Get all rooms where user is a participant
+    const participants = await this.db.select().from(chatParticipants).where(eq(chatParticipants.userId, userId));
+    
+    if (participants.length === 0) {
+      return [];
+    }
+
+    const roomIds = participants.map((p: ChatParticipant) => p.roomId);
+    return await this.db.select().from(chatRooms).where(inArray(chatRooms.id, roomIds));
+  }
+
+  async getChatRoomParticipants(roomId: number): Promise<User[]> {
+    const participants = await this.db.select().from(chatParticipants).where(eq(chatParticipants.roomId, roomId));
+    
+    if (participants.length === 0) {
+      return [];
+    }
+
+    const userIds = participants.map((p: ChatParticipant) => p.userId);
+    return await this.db.select().from(users).where(inArray(users.id, userIds));
+  }
+
+  async createChatRoom(room: InsertChatRoom): Promise<ChatRoom> {
+    const result = await this.db.insert(chatRooms).values(room).returning();
+    return result[0];
+  }
+
+  async addChatParticipant(participant: InsertChatParticipant): Promise<ChatParticipant> {
+    // Check if participant already exists
+    const existing = await this.db.select()
+      .from(chatParticipants)
+      .where(and(
+        eq(chatParticipants.roomId, participant.roomId),
+        eq(chatParticipants.userId, participant.userId)
+      ));
+
+    if (existing.length > 0) {
+      return existing[0];
+    }
+
+    const result = await this.db.insert(chatParticipants).values(participant).returning();
+    return result[0];
+  }
+
+  async getChatMessages(roomId: number): Promise<ChatMessage[]> {
+    return await this.db
+      .select()
+      .from(chatMessages)
+      .where(eq(chatMessages.roomId, roomId))
+      .orderBy(asc(chatMessages.createdAt));
+  }
+
+  async createChatMessage(message: InsertChatMessage): Promise<ChatMessage> {
+    const result = await this.db.insert(chatMessages).values(message).returning();
+    return result[0];
+  }
+
+  async markChatMessagesAsRead(roomId: number, userId: number): Promise<void> {
+    await this.db
+      .update(chatMessages)
+      .set({ read: true })
+      .where(
+        and(
+          eq(chatMessages.roomId, roomId),
+          ne(chatMessages.userId, userId), // Only mark messages from other users as read
+          eq(chatMessages.read, false)
+        )
+      );
+  }
+
+  async getUnreadMessageCount(userId: number): Promise<number> {
+    // First get all rooms this user is part of
+    const participants = await this.db.select().from(chatParticipants).where(eq(chatParticipants.userId, userId));
+    
+    if (participants.length === 0) {
+      return 0;
+    }
+
+    const roomIds = participants.map((p: ChatParticipant) => p.roomId);
+    
+    // Count unread messages in those rooms from other users
+    const result = await this.db
+      .select({ count: count() })
+      .from(chatMessages)
+      .where(
+        and(
+          inArray(chatMessages.roomId, roomIds),
+          ne(chatMessages.userId, userId), // Messages from other users
+          eq(chatMessages.read, false)     // That are unread
+        )
+      );
+      
+    return result[0]?.count || 0;
   }
 }
 
