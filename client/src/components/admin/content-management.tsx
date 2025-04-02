@@ -140,10 +140,12 @@ export default function ContentManagement() {
   const updateMutation = useMutation({
     mutationFn: async (data: ContentFormValues & { id: number }) => {
       const { id, ...values } = data;
+      console.log("Updating content with data:", { id, values });
       const res = await apiRequest('PUT', `/api/content/${id}`, values);
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log("Content updated successfully:", data);
       toast({
         title: "Success",
         description: "Content updated successfully",
@@ -153,6 +155,7 @@ export default function ContentManagement() {
       queryClient.invalidateQueries({ queryKey: ['/api/content'] });
     },
     onError: (error: Error) => {
+      console.error("Error updating content:", error);
       toast({
         title: "Error",
         description: `Failed to update content: ${error.message}`,
@@ -186,9 +189,18 @@ export default function ContentManagement() {
   
   // Handle form submission
   const onSubmit = (data: ContentFormValues) => {
+    console.log("Form submitted with values:", data);
     if (isEditing && selectedContent) {
-      updateMutation.mutate({ ...data, id: selectedContent.id });
+      console.log("Updating content with ID:", selectedContent.id);
+      updateMutation.mutate({ 
+        id: selectedContent.id,
+        type: data.type,
+        title: data.title,
+        content: data.content,
+        order: data.order
+      });
     } else if (isCreating) {
+      console.log("Creating new content");
       createMutation.mutate(data);
     }
   };
@@ -278,7 +290,7 @@ export default function ContentManagement() {
                             <FormLabel>Content Type</FormLabel>
                             <Select 
                               onValueChange={field.onChange} 
-                              defaultValue={field.value}
+                              value={field.value}
                             >
                               <FormControl>
                                 <SelectTrigger>

@@ -510,12 +510,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Unauthorized" });
       }
       
-      const updatedContent = await storage.updateWebsiteContent(parseInt(req.params.id), req.body);
+      console.log('Updating content with ID:', req.params.id);
+      console.log('Update data:', req.body);
+      
+      // Validate the input data
+      const validatedData = insertWebsiteContentSchema.partial().parse(req.body);
+      
+      const updatedContent = await storage.updateWebsiteContent(parseInt(req.params.id), validatedData);
       if (!updatedContent) {
         return res.status(404).json({ error: "Content not found" });
       }
+      
+      console.log('Updated content:', updatedContent);
       res.json(updatedContent);
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        console.error('Validation error:', error.errors);
+        return res.status(400).json({ error: error.errors });
+      }
       console.error('Error updating content:', error);
       res.status(500).json({ error: "Failed to update content" });
     }

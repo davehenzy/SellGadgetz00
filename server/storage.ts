@@ -484,11 +484,27 @@ export class DatabaseStorage implements IStorage {
   }
   
   async updateWebsiteContent(id: number, content: Partial<InsertWebsiteContent>): Promise<WebsiteContent | undefined> {
+    console.log('Updating website content in DB:', id, content);
+    
+    // Ensure we're creating a clean update object with only the fields that were provided
+    const updateData: Partial<Record<keyof typeof websiteContent.$inferInsert, any>> = {};
+    if (content.type !== undefined) updateData.type = content.type;
+    if (content.title !== undefined) updateData.title = content.title;
+    if (content.content !== undefined) updateData.content = content.content;
+    if (content.order !== undefined) updateData.order = content.order;
+    
+    // Add lastUpdated timestamp
+    updateData.lastUpdated = new Date();
+    
+    console.log('Final update data:', updateData);
+    
     const result = await this.db
       .update(websiteContent)
-      .set({ ...content, lastUpdated: new Date() })
+      .set(updateData)
       .where(eq(websiteContent.id, id))
       .returning();
+      
+    console.log('Update result:', result);
     return result.length > 0 ? result[0] : undefined;
   }
   
