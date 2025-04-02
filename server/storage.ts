@@ -2,8 +2,25 @@ import { users, laptops, repairs, invoices } from "@shared/schema";
 import type { User, InsertUser, Laptop, InsertLaptop, Repair, InsertRepair, Invoice, InsertInvoice } from "@shared/schema";
 import session from "express-session";
 import createMemoryStore from "memorystore";
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { eq, and } from 'drizzle-orm';
+import pg from 'pg';
+import connectPg from 'connect-pg-simple';
+import { scrypt, randomBytes, timingSafeEqual } from "crypto";
+import { promisify } from "util";
+
+const { Pool } = pg;
 
 const MemoryStore = createMemoryStore(session);
+const PostgresSessionStore = connectPg(session);
+
+const scryptAsync = promisify(scrypt);
+
+async function hashPassword(password: string) {
+  const salt = randomBytes(16).toString("hex");
+  const buf = (await scryptAsync(password, salt, 64)) as Buffer;
+  return `${buf.toString("hex")}.${salt}`;
+}
 
 // Storage interface for CRUD operations
 export interface IStorage {
@@ -36,197 +53,236 @@ export interface IStorage {
   updateInvoiceStatus(id: number, status: string): Promise<Invoice | undefined>;
   
   // Session store
-  sessionStore: session.SessionStore;
+  sessionStore: any;
+  
+  // Database utilities
+  initDb(): Promise<void>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<number, User>;
-  private laptops: Map<number, Laptop>;
-  private repairs: Map<number, Repair>;
-  private invoices: Map<number, Invoice>;
-  private userId: number;
-  private laptopId: number;
-  private repairId: number;
-  private invoiceId: number;
-  sessionStore: session.SessionStore;
+export class DatabaseStorage implements IStorage {
+  private pool: Pool;
+  private db: any;
+  sessionStore: any;
 
   constructor() {
-    this.users = new Map();
-    this.laptops = new Map();
-    this.repairs = new Map();
-    this.invoices = new Map();
-    this.userId = 1;
-    this.laptopId = 1;
-    this.repairId = 1;
-    this.invoiceId = 1;
-    this.sessionStore = new MemoryStore({
-      checkPeriod: 86400000 // prune expired entries every 24h
+    this.pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
     });
     
-    // Add a default admin user
-    this.createUser({
-      username: "admin",
-      password: "admin123", // This will be hashed in auth.ts
-      email: "admin@sellgadgetz.com",
-      fullName: "Admin User",
-      phone: "1234567890"
-    }).then(user => {
-      // Manually set admin status for the admin user
-      const adminUser = { ...user, isAdmin: true };
-      this.users.set(user.id, adminUser);
+    this.db = drizzle(this.pool);
+    
+    this.sessionStore = new PostgresSessionStore({
+      pool: this.pool,
+      createTableIfMissing: true,
+      tableName: 'session'
     });
+  }
+
+  async initDb() {
+    console.log("Initializing database...");
+    
+    // Create enums and tables
+    await this.pool.query(`
+      DO $$ 
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'laptop_status') THEN
+          CREATE TYPE laptop_status AS ENUM ('pending', 'approved', 'sold', 'rejected');
+        END IF;
+        
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'repair_status') THEN
+          CREATE TYPE repair_status AS ENUM ('pending', 'diagnosed', 'in_progress', 'completed', 'cancelled');
+        END IF;
+      END $$;
+      
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        username TEXT NOT NULL UNIQUE,
+        password TEXT NOT NULL,
+        email TEXT NOT NULL UNIQUE,
+        full_name TEXT NOT NULL,
+        phone TEXT,
+        is_admin BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+      
+      CREATE TABLE IF NOT EXISTS laptops (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        title TEXT NOT NULL,
+        brand TEXT NOT NULL,
+        model TEXT NOT NULL,
+        processor TEXT NOT NULL,
+        ram TEXT NOT NULL,
+        storage TEXT NOT NULL,
+        display TEXT NOT NULL,
+        condition TEXT NOT NULL,
+        description TEXT NOT NULL,
+        price INTEGER NOT NULL,
+        images JSONB NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+      
+      CREATE TABLE IF NOT EXISTS repairs (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        brand TEXT NOT NULL,
+        model TEXT NOT NULL,
+        issue_type TEXT NOT NULL,
+        description TEXT NOT NULL,
+        images JSONB,
+        estimated_cost INTEGER,
+        status TEXT NOT NULL DEFAULT 'pending',
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+      
+      CREATE TABLE IF NOT EXISTS invoices (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        repair_id INTEGER REFERENCES repairs(id),
+        amount INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'unpaid',
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+    `);
+    
+    // Check if admin user exists
+    const adminUser = await this.getUserByUsername('admin');
+    
+    if (!adminUser) {
+      console.log("Creating admin user...");
+      // Create admin user
+      await this.createUser({
+        username: "admin",
+        password: await hashPassword("admin123"),
+        email: "admin@sellgadgetz.com",
+        fullName: "Admin User",
+        phone: "1234567890"
+      });
+      
+      // Update admin status
+      await this.pool.query(
+        "UPDATE users SET is_admin = TRUE WHERE username = 'admin'"
+      );
+    }
+    
+    console.log("Database initialized successfully");
   }
 
   // User operations
   async getUser(id: number): Promise<User | undefined> {
-    return this.users.get(id);
+    const result = await this.db.select().from(users).where(eq(users.id, id));
+    return result.length > 0 ? result[0] : undefined;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username
-    );
+    const result = await this.db.select().from(users).where(eq(users.username, username));
+    return result.length > 0 ? result[0] : undefined;
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.email === email
-    );
+    const result = await this.db.select().from(users).where(eq(users.email, email));
+    return result.length > 0 ? result[0] : undefined;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = this.userId++;
-    const createdAt = new Date();
-    const user: User = { 
-      ...insertUser, 
-      id, 
-      isAdmin: false,
-      createdAt
-    };
-    this.users.set(id, user);
-    return user;
+    const result = await this.db.insert(users).values(insertUser).returning();
+    return result[0];
   }
 
   async getAllUsers(): Promise<User[]> {
-    return Array.from(this.users.values());
+    return await this.db.select().from(users);
   }
 
   // Laptop operations
   async getLaptop(id: number): Promise<Laptop | undefined> {
-    return this.laptops.get(id);
+    const result = await this.db.select().from(laptops).where(eq(laptops.id, id));
+    return result.length > 0 ? result[0] : undefined;
   }
 
   async getLaptopsByUserId(userId: number): Promise<Laptop[]> {
-    return Array.from(this.laptops.values()).filter(
-      (laptop) => laptop.userId === userId
-    );
+    return await this.db.select().from(laptops).where(eq(laptops.userId, userId));
   }
 
   async getAllLaptops(): Promise<Laptop[]> {
-    return Array.from(this.laptops.values());
+    return await this.db.select().from(laptops);
   }
 
   async createLaptop(insertLaptop: InsertLaptop): Promise<Laptop> {
-    const id = this.laptopId++;
-    const createdAt = new Date();
-    const laptop: Laptop = { 
-      ...insertLaptop, 
-      id, 
-      status: 'pending',
-      createdAt
-    };
-    this.laptops.set(id, laptop);
-    return laptop;
+    const result = await this.db.insert(laptops).values(insertLaptop).returning();
+    return result[0];
   }
 
   async updateLaptopStatus(id: number, status: string): Promise<Laptop | undefined> {
-    const laptop = this.laptops.get(id);
-    if (!laptop) return undefined;
-    
-    const updatedLaptop = { ...laptop, status };
-    this.laptops.set(id, updatedLaptop);
-    return updatedLaptop;
+    const result = await this.db
+      .update(laptops)
+      .set({ status })
+      .where(eq(laptops.id, id))
+      .returning();
+    return result.length > 0 ? result[0] : undefined;
   }
 
   // Repair operations
   async getRepair(id: number): Promise<Repair | undefined> {
-    return this.repairs.get(id);
+    const result = await this.db.select().from(repairs).where(eq(repairs.id, id));
+    return result.length > 0 ? result[0] : undefined;
   }
 
   async getRepairsByUserId(userId: number): Promise<Repair[]> {
-    return Array.from(this.repairs.values()).filter(
-      (repair) => repair.userId === userId
-    );
+    return await this.db.select().from(repairs).where(eq(repairs.userId, userId));
   }
 
   async getAllRepairs(): Promise<Repair[]> {
-    return Array.from(this.repairs.values());
+    return await this.db.select().from(repairs);
   }
 
   async createRepair(insertRepair: InsertRepair): Promise<Repair> {
-    const id = this.repairId++;
-    const createdAt = new Date();
-    const repair: Repair = { 
-      ...insertRepair, 
-      id, 
-      estimatedCost: null,
-      status: 'pending',
-      createdAt
-    };
-    this.repairs.set(id, repair);
-    return repair;
+    const result = await this.db.insert(repairs).values(insertRepair).returning();
+    return result[0];
   }
 
   async updateRepairStatus(id: number, status: string): Promise<Repair | undefined> {
-    const repair = this.repairs.get(id);
-    if (!repair) return undefined;
-    
-    const updatedRepair = { ...repair, status };
-    this.repairs.set(id, updatedRepair);
-    return updatedRepair;
+    const result = await this.db
+      .update(repairs)
+      .set({ status })
+      .where(eq(repairs.id, id))
+      .returning();
+    return result.length > 0 ? result[0] : undefined;
   }
 
   async updateRepairEstimatedCost(id: number, estimatedCost: number): Promise<Repair | undefined> {
-    const repair = this.repairs.get(id);
-    if (!repair) return undefined;
-    
-    const updatedRepair = { ...repair, estimatedCost };
-    this.repairs.set(id, updatedRepair);
-    return updatedRepair;
+    const result = await this.db
+      .update(repairs)
+      .set({ estimatedCost })
+      .where(eq(repairs.id, id))
+      .returning();
+    return result.length > 0 ? result[0] : undefined;
   }
 
   // Invoice operations
   async getInvoice(id: number): Promise<Invoice | undefined> {
-    return this.invoices.get(id);
+    const result = await this.db.select().from(invoices).where(eq(invoices.id, id));
+    return result.length > 0 ? result[0] : undefined;
   }
 
   async getInvoicesByUserId(userId: number): Promise<Invoice[]> {
-    return Array.from(this.invoices.values()).filter(
-      (invoice) => invoice.userId === userId
-    );
+    return await this.db.select().from(invoices).where(eq(invoices.userId, userId));
   }
 
   async createInvoice(insertInvoice: InsertInvoice): Promise<Invoice> {
-    const id = this.invoiceId++;
-    const createdAt = new Date();
-    const invoice: Invoice = { 
-      ...insertInvoice, 
-      id, 
-      status: 'unpaid',
-      createdAt
-    };
-    this.invoices.set(id, invoice);
-    return invoice;
+    const result = await this.db.insert(invoices).values(insertInvoice).returning();
+    return result[0];
   }
 
   async updateInvoiceStatus(id: number, status: string): Promise<Invoice | undefined> {
-    const invoice = this.invoices.get(id);
-    if (!invoice) return undefined;
-    
-    const updatedInvoice = { ...invoice, status };
-    this.invoices.set(id, updatedInvoice);
-    return updatedInvoice;
+    const result = await this.db
+      .update(invoices)
+      .set({ status })
+      .where(eq(invoices.id, id))
+      .returning();
+    return result.length > 0 ? result[0] : undefined;
   }
 }
 
-export const storage = new MemStorage();
+// Export a single instance
+export const storage = new DatabaseStorage();
