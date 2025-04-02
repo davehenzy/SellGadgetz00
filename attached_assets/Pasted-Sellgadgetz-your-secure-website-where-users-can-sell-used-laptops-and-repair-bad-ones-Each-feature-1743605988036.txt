@@ -1,0 +1,47 @@
+Sellgadgetz, your secure website where users can sell used laptops and repair bad ones. Each feature it value proposition.
+
+1. Homepage And Other Pages: First pages visitors see before they either sign up or login. It features the homepage with several sections, about page, services page, FAQ page, and contact page.
+Value Proposition: Gives visitors an overview of what the website is all about.
+
+
+2. Live Chat Integration: Enables visitors to start a conversation with the company and get further clarity without necessarily creating an account or logging in.
+Value Proposition: Gives visitors an overview of what the website is all about. Live chat
+
+
+3. Authentication System: Allows users to create accounts, login, and manage their profiles. It features email and phone number (OTP-based) verification upon registration, and password recovery.
+Value Proposition: Provides personalized user experiences, enables adequate user authentication, creates a foundation for tailored services, builds trust and reduces fake accounts or fraudulent activities.
+
+
+4. Dashboard Page for Selling Laptops: Users can upload laptops for sale, including specifications, images, and an asking price. It features a listing creation, fetching from database, search and filter functionality.
+Value Proposition: Provides an intuitive page for sellers to showcase their laptops by uploading, which is received by the admin.
+
+
+5. Laptop Repair Dashboard Page: A page for users to request laptop repair services. It features a form to describe repair issues, upload images, and get an invoice estimate.
+Value Proposition: Facilitates easy access to repair services and streamlines customer requests.
+
+
+6. Payment Gateway Integration: Enables users make secure payments for repairs. It features integrating Paystack or Flutterwave.
+Value Proposition: Ensures secure and seamless payment transactions for users.
+
+
+7. Chat Support System: Provides real-time communication between users and support staff or the admin. It features a custom-built chat system with chat history for users and support staff.
+Value Proposition: Enhances effective customer support and improves overall user satisfaction.
+
+
+8. Identity Verification Via Third-Party API: Verifies user identities via a third-party API. It features integration with APIs like VerifyMe, Smile Identity, Persona or others and secure handling of personal data.
+Value Proposition: Adds credibility to user profiles, reducing scams and enhancing trust, whilst providing in-depth information to apprehend users in the event of unforeseen circumstances.
+
+
+9. Invoicing System: Generates and issues invoices to users for completed repair services. It features invoice generation, delivery and status (paid or unpaid).
+Value Proposition: Professionalizes transactions and provides users with official payment records.
+
+
+10. Admin Dashboard: A backend dashboard for administrators to manage users, transactions, listings, payments, reports and just about anything concerning the website.
+Value Proposition: Ensures operational efficiency and control over platform activities.
+
+
+
+
+
+
+Conclusion: This will provide a secure, reliable, and user-friendly platform for people to sell, and repair their laptops in Nigeria. It has all the features to build trust, attract users, and grow the business.
