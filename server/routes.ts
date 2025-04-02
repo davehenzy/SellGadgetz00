@@ -8,7 +8,8 @@ import {
   insertInvoiceSchema,
   insertChatRoomSchema,
   insertChatMessageSchema,
-  insertChatParticipantSchema
+  insertChatParticipantSchema,
+  insertWebsiteContentSchema
 } from "@shared/schema";
 import { z } from "zod";
 import { WebSocketServer, WebSocket } from "ws";
@@ -448,6 +449,89 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ count });
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch unread message count" });
+    }
+  });
+
+  // API routes for website content
+  app.get("/api/content", async (req, res) => {
+    try {
+      const content = await storage.getAllWebsiteContent();
+      res.json(content);
+    } catch (error) {
+      console.error('Error fetching website content:', error);
+      res.status(500).json({ error: "Failed to fetch website content" });
+    }
+  });
+  
+  app.get("/api/content/type/:type", async (req, res) => {
+    try {
+      const content = await storage.getWebsiteContentByType(req.params.type);
+      res.json(content);
+    } catch (error) {
+      console.error('Error fetching content by type:', error);
+      res.status(500).json({ error: "Failed to fetch content by type" });
+    }
+  });
+  
+  app.get("/api/content/:id", async (req, res) => {
+    try {
+      const contentItem = await storage.getWebsiteContentById(parseInt(req.params.id));
+      if (!contentItem) {
+        return res.status(404).json({ error: "Content not found" });
+      }
+      res.json(contentItem);
+    } catch (error) {
+      console.error('Error fetching content item:', error);
+      res.status(500).json({ error: "Failed to fetch content item" });
+    }
+  });
+  
+  app.post("/api/content", async (req, res) => {
+    try {
+      if (!req.isAuthenticated() || !req.user.isAdmin) {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+      
+      const validatedData = insertWebsiteContentSchema.parse(req.body);
+      const newContent = await storage.createWebsiteContent(validatedData);
+      res.status(201).json(newContent);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error('Error creating content:', error);
+      res.status(500).json({ error: "Failed to create content" });
+    }
+  });
+  
+  app.put("/api/content/:id", async (req, res) => {
+    try {
+      if (!req.isAuthenticated() || !req.user.isAdmin) {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+      
+      const updatedContent = await storage.updateWebsiteContent(parseInt(req.params.id), req.body);
+      if (!updatedContent) {
+        return res.status(404).json({ error: "Content not found" });
+      }
+      res.json(updatedContent);
+    } catch (error) {
+      console.error('Error updating content:', error);
+      res.status(500).json({ error: "Failed to update content" });
+    }
+  });
+  
+  app.delete("/api/content/:id", async (req, res) => {
+    try {
+      if (!req.isAuthenticated() || !req.user.isAdmin) {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+      
+      await storage.deleteWebsiteContent(parseInt(req.params.id));
+      res.status(204).end();
+    } catch (error) {
+      console.error('Error deleting content:', error);
+      res.status(500).json({ error: "Failed to delete content" });
     }
   });
 

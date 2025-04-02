@@ -162,3 +162,29 @@ export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
 
 export type ChatParticipant = typeof chatParticipants.$inferSelect;
 export type InsertChatParticipant = z.infer<typeof insertChatParticipantSchema>;
+
+// Website content management
+export const contentTypes = pgEnum('content_type', ['hero', 'services', 'how_it_works', 'testimonials', 'faq', 'contact', 'footer']);
+
+export const websiteContent = pgTable("website_content", {
+  id: serial("id").primaryKey(),
+  type: contentTypes("type").notNull(),
+  title: text("title").notNull(),
+  subtitle: text("subtitle"),
+  content: text("content").notNull(),
+  order: integer("order").default(0),
+  active: boolean("active").default(true),
+  lastUpdated: timestamp("last_updated").defaultNow()
+});
+
+export const insertWebsiteContentSchema = createInsertSchema(websiteContent).pick({
+  type: true,
+  title: true,
+  subtitle: true,
+  content: true,
+  order: true,
+  active: true
+});
+
+export type WebsiteContent = typeof websiteContent.$inferSelect;
+export type InsertWebsiteContent = z.infer<typeof insertWebsiteContentSchema>;

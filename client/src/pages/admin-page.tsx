@@ -6,6 +6,7 @@ import Footer from "@/components/layout/footer";
 import LaptopListings from "@/components/admin/laptop-listings";
 import RepairRequests from "@/components/admin/repair-requests";
 import UserManagement from "@/components/admin/user-management";
+import ContentManagement from "@/components/admin/content-management";
 import { 
   Card, 
   CardContent, 
@@ -16,7 +17,7 @@ import {
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery } from "@tanstack/react-query";
-import { User, Laptop, Repair, Invoice } from "@shared/schema";
+import { User, Laptop, Repair, Invoice, WebsiteContent } from "@shared/schema";
 import { 
   Users, 
   ShoppingCart, 
@@ -24,7 +25,8 @@ import {
   FileText, 
   Settings,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  LayoutTemplate
 } from "lucide-react";
 
 export default function AdminPage() {
@@ -49,6 +51,11 @@ export default function AdminPage() {
 
   const { data: invoices, isLoading: isLoadingInvoices } = useQuery<Invoice[]>({
     queryKey: ["/api/invoices"],
+    enabled: !!user?.isAdmin,
+  });
+  
+  const { data: content, isLoading: isLoadingContent } = useQuery<WebsiteContent[]>({
+    queryKey: ["/api/content"],
     enabled: !!user?.isAdmin,
   });
 
@@ -82,7 +89,7 @@ export default function AdminPage() {
             <p className="text-gray-600 mt-2">Manage the SellGadgetz platform</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-lg font-medium flex items-center">
@@ -146,6 +153,22 @@ export default function AdminPage() {
                 )}
               </CardContent>
             </Card>
+            
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg font-medium flex items-center">
+                  <LayoutTemplate className="h-5 w-5 mr-2 text-red-600" />
+                  Content
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {isLoadingContent ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                ) : (
+                  <p className="text-3xl font-bold">{content ? content.length : 0}</p>
+                )}
+              </CardContent>
+            </Card>
           </div>
 
           <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -161,6 +184,10 @@ export default function AdminPage() {
               <TabsTrigger value="users" className="flex items-center">
                 <Users className="mr-2 h-4 w-4" />
                 User Management
+              </TabsTrigger>
+              <TabsTrigger value="content" className="flex items-center">
+                <LayoutTemplate className="mr-2 h-4 w-4" />
+                Content
               </TabsTrigger>
               <TabsTrigger value="settings" className="flex items-center">
                 <Settings className="mr-2 h-4 w-4" />
@@ -178,6 +205,10 @@ export default function AdminPage() {
             
             <TabsContent value="users">
               <UserManagement />
+            </TabsContent>
+            
+            <TabsContent value="content">
+              <ContentManagement />
             </TabsContent>
 
             <TabsContent value="settings">

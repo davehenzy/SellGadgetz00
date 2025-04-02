@@ -1,10 +1,12 @@
 import { 
   users, laptops, repairs, invoices, 
-  chatRooms, chatMessages, chatParticipants
+  chatRooms, chatMessages, chatParticipants,
+  websiteContent
 } from "@shared/schema";
 import type { 
   User, InsertUser, Laptop, InsertLaptop, Repair, InsertRepair, Invoice, InsertInvoice,
-  ChatRoom, InsertChatRoom, ChatMessage, InsertChatMessage, ChatParticipant, InsertChatParticipant
+  ChatRoom, InsertChatRoom, ChatMessage, InsertChatMessage, ChatParticipant, InsertChatParticipant,
+  WebsiteContent, InsertWebsiteContent
 } from "@shared/schema";
 import session from "express-session";
 import createMemoryStore from "memorystore";
@@ -71,6 +73,15 @@ export interface IStorage {
   markChatMessagesAsRead(roomId: number, userId: number): Promise<void>;
   getUnreadMessageCount(userId: number): Promise<number>;
   
+  // Website content operations
+  getWebsiteContentById(id: number): Promise<WebsiteContent | undefined>;
+  // Using any for type to avoid TypeScript errors with the enum type
+  getWebsiteContentByType(type: any): Promise<WebsiteContent[]>;
+  getAllWebsiteContent(): Promise<WebsiteContent[]>;
+  createWebsiteContent(content: InsertWebsiteContent): Promise<WebsiteContent>;
+  updateWebsiteContent(id: number, content: Partial<InsertWebsiteContent>): Promise<WebsiteContent | undefined>;
+  deleteWebsiteContent(id: number): Promise<void>;
+  
   // Session store
   sessionStore: any;
   
@@ -110,6 +121,10 @@ export class DatabaseStorage implements IStorage {
         
         IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'repair_status') THEN
           CREATE TYPE repair_status AS ENUM ('pending', 'diagnosed', 'in_progress', 'completed', 'cancelled');
+        END IF;
+        
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'content_type') THEN
+          CREATE TYPE content_type AS ENUM ('hero', 'services', 'how_it_works', 'testimonials', 'faq', 'contact', 'footer');
         END IF;
       END $$;
       
@@ -185,6 +200,17 @@ export class DatabaseStorage implements IStorage {
         room_id INTEGER NOT NULL REFERENCES chat_rooms(id),
         user_id INTEGER NOT NULL REFERENCES users(id),
         created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+      
+      CREATE TABLE IF NOT EXISTS website_content (
+        id SERIAL PRIMARY KEY,
+        type content_type NOT NULL,
+        title TEXT NOT NULL,
+        subtitle TEXT,
+        content TEXT NOT NULL,
+        "order" INTEGER DEFAULT 0,
+        active BOOLEAN DEFAULT TRUE,
+        last_updated TIMESTAMP DEFAULT NOW()
       );
     `);
     
@@ -429,6 +455,47 @@ export class DatabaseStorage implements IStorage {
       );
       
     return result[0]?.count || 0;
+  }
+  
+  // Website content operations
+  async getWebsiteContentById(id: number): Promise<WebsiteContent | undefined> {
+    const result = await this.db.select().from(websiteContent).where(eq(websiteContent.id, id));
+    return result.length > 0 ? result[0] : undefined;
+  }
+  
+  async getWebsiteContentByType(type: string): Promise<WebsiteContent[]> {
+    return await this.db
+      .select()
+      .from(websiteContent)
+      .where(eq(websiteContent.type, type as any))
+      .orderBy(asc(websiteContent.order));
+  }
+  
+  async getAllWebsiteContent(): Promise<WebsiteContent[]> {
+    return await this.db
+      .select()
+      .from(websiteContent)
+      .orderBy(asc(websiteContent.type), asc(websiteContent.order));
+  }
+  
+  async createWebsiteContent(content: InsertWebsiteContent): Promise<WebsiteContent> {
+    const result = await this.db.insert(websiteContent).values(content).returning();
+    return result[0];
+  }
+  
+  async updateWebsiteContent(id: number, content: Partial<InsertWebsiteContent>): Promise<WebsiteContent | undefined> {
+    const result = await this.db
+      .update(websiteContent)
+      .set({ ...content, lastUpdated: new Date() })
+      .where(eq(websiteContent.id, id))
+      .returning();
+    return result.length > 0 ? result[0] : undefined;
+  }
+  
+  async deleteWebsiteContent(id: number): Promise<void> {
+    await this.db
+      .delete(websiteContent)
+      .where(eq(websiteContent.id, id));
   }
 }
 
