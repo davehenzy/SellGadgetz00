@@ -60,7 +60,7 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
-  private pool: Pool;
+  private pool: any;
   private db: any;
   sessionStore: any;
 
