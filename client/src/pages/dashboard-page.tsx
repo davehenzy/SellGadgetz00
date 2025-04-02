@@ -218,8 +218,11 @@ export default function DashboardPage() {
 
           <Card>
             <CardHeader>
+              <CardTitle className="text-xl font-bold">Activity Dashboard</CardTitle>
+            </CardHeader>
+            <CardContent>
               <Tabs value={activeTab} onValueChange={setActiveTab}>
-                <TabsList>
+                <TabsList className="mb-4">
                   <TabsTrigger value="laptops" className="flex items-center">
                     <ShoppingCart className="mr-2 h-4 w-4" />
                     My Listings
@@ -233,162 +236,161 @@ export default function DashboardPage() {
                     Invoices
                   </TabsTrigger>
                 </TabsList>
-              </Tabs>
-            </CardHeader>
-            <CardContent>
-              {/* Laptops Tab */}
-              <TabsContent value="laptops" className="space-y-4">
-                {isLoadingLaptops ? (
-                  <div className="flex justify-center items-center py-8">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                  </div>
-                ) : laptops && laptops.length > 0 ? (
-                  <div className="rounded-md border overflow-hidden">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Title</TableHead>
-                          <TableHead>Price</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Date Listed</TableHead>
-                          <TableHead></TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {laptops.map((laptop) => (
-                          <TableRow key={laptop.id}>
-                            <TableCell className="font-medium">{laptop.title}</TableCell>
-                            <TableCell>{formatPrice(laptop.price)}</TableCell>
-                            <TableCell>{getLaptopStatusBadge(laptop.status)}</TableCell>
-                            <TableCell>{new Date(laptop.createdAt).toLocaleDateString()}</TableCell>
-                            <TableCell>
-                              <Button variant="ghost" size="sm" onClick={() => handleViewLaptop(laptop)}>
-                                View
-                              </Button>
-                            </TableCell>
+                
+                {/* Laptops Tab */}
+                <TabsContent value="laptops" className="space-y-4">
+                  {isLoadingLaptops ? (
+                    <div className="flex justify-center items-center py-8">
+                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    </div>
+                  ) : laptops && laptops.length > 0 ? (
+                    <div className="rounded-md border overflow-hidden">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Title</TableHead>
+                            <TableHead>Price</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Date Listed</TableHead>
+                            <TableHead></TableHead>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <ShoppingCart className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">No laptops listed yet</h3>
-                    <p className="text-gray-600 mb-4">Start selling your used laptops today</p>
-                    <Link href="/sell">
-                      <Button>
-                        <Plus className="mr-2 h-4 w-4" />
-                        List a Laptop
-                      </Button>
-                    </Link>
-                  </div>
-                )}
-              </TabsContent>
-
-              {/* Repairs Tab */}
-              <TabsContent value="repairs" className="space-y-4">
-                {isLoadingRepairs ? (
-                  <div className="flex justify-center items-center py-8">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                  </div>
-                ) : repairs && repairs.length > 0 ? (
-                  <div className="rounded-md border overflow-hidden">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Brand</TableHead>
-                          <TableHead>Model</TableHead>
-                          <TableHead>Issue</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Estimate</TableHead>
-                          <TableHead></TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {repairs.map((repair) => (
-                          <TableRow key={repair.id}>
-                            <TableCell className="font-medium">{repair.brand}</TableCell>
-                            <TableCell>{repair.model}</TableCell>
-                            <TableCell>{repair.issueType}</TableCell>
-                            <TableCell>{getRepairStatusBadge(repair.status)}</TableCell>
-                            <TableCell>{formatPrice(repair.estimatedCost)}</TableCell>
-                            <TableCell>
-                              <Button variant="ghost" size="sm" onClick={() => handleViewRepair(repair)}>
-                                View
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <Wrench className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">No repair requests yet</h3>
-                    <p className="text-gray-600 mb-4">Request a laptop repair service</p>
-                    <Link href="/repair">
-                      <Button>
-                        <Plus className="mr-2 h-4 w-4" />
-                        Request Repair
-                      </Button>
-                    </Link>
-                  </div>
-                )}
-              </TabsContent>
-
-              {/* Invoices Tab */}
-              <TabsContent value="invoices" className="space-y-4">
-                {isLoadingInvoices ? (
-                  <div className="flex justify-center items-center py-8">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                  </div>
-                ) : invoices && invoices.length > 0 ? (
-                  <div className="rounded-md border overflow-hidden">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Invoice #</TableHead>
-                          <TableHead>Amount</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Date</TableHead>
-                          <TableHead></TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {invoices.map((invoice) => (
-                          <TableRow key={invoice.id}>
-                            <TableCell className="font-medium">INV-{invoice.id.toString().padStart(4, '0')}</TableCell>
-                            <TableCell>{formatPrice(invoice.amount)}</TableCell>
-                            <TableCell>{getInvoiceStatusBadge(invoice.status)}</TableCell>
-                            <TableCell>{new Date(invoice.createdAt).toLocaleDateString()}</TableCell>
-                            <TableCell>
-                              <Button variant="ghost" size="sm" onClick={() => handleViewInvoice(invoice)}>
-                                View
-                              </Button>
-                              {invoice.status === "unpaid" && (
-                                <Button variant="outline" size="sm" className="ml-2">
-                                  <DollarSign className="mr-1 h-3 w-3" />
-                                  Pay
+                        </TableHeader>
+                        <TableBody>
+                          {laptops.map((laptop) => (
+                            <TableRow key={laptop.id}>
+                              <TableCell className="font-medium">{laptop.title}</TableCell>
+                              <TableCell>{formatPrice(laptop.price)}</TableCell>
+                              <TableCell>{getLaptopStatusBadge(laptop.status)}</TableCell>
+                              <TableCell>{new Date(laptop.createdAt).toLocaleDateString()}</TableCell>
+                              <TableCell>
+                                <Button variant="ghost" size="sm" onClick={() => handleViewLaptop(laptop)}>
+                                  View
                                 </Button>
-                              )}
-                            </TableCell>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <ShoppingCart className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">No laptops listed yet</h3>
+                      <p className="text-gray-600 mb-4">Start selling your used laptops today</p>
+                      <Link href="/sell">
+                        <Button>
+                          <Plus className="mr-2 h-4 w-4" />
+                          List a Laptop
+                        </Button>
+                      </Link>
+                    </div>
+                  )}
+                </TabsContent>
+
+                {/* Repairs Tab */}
+                <TabsContent value="repairs" className="space-y-4">
+                  {isLoadingRepairs ? (
+                    <div className="flex justify-center items-center py-8">
+                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    </div>
+                  ) : repairs && repairs.length > 0 ? (
+                    <div className="rounded-md border overflow-hidden">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Brand</TableHead>
+                            <TableHead>Model</TableHead>
+                            <TableHead>Issue</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Estimate</TableHead>
+                            <TableHead></TableHead>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <FileText className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">No invoices yet</h3>
-                    <p className="text-gray-600">
-                      Invoices will appear here when you receive them for repair services
-                    </p>
-                  </div>
-                )}
-              </TabsContent>
+                        </TableHeader>
+                        <TableBody>
+                          {repairs.map((repair) => (
+                            <TableRow key={repair.id}>
+                              <TableCell className="font-medium">{repair.brand}</TableCell>
+                              <TableCell>{repair.model}</TableCell>
+                              <TableCell>{repair.issueType}</TableCell>
+                              <TableCell>{getRepairStatusBadge(repair.status)}</TableCell>
+                              <TableCell>{formatPrice(repair.estimatedCost)}</TableCell>
+                              <TableCell>
+                                <Button variant="ghost" size="sm" onClick={() => handleViewRepair(repair)}>
+                                  View
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <Wrench className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">No repair requests yet</h3>
+                      <p className="text-gray-600 mb-4">Request a laptop repair service</p>
+                      <Link href="/repair">
+                        <Button>
+                          <Plus className="mr-2 h-4 w-4" />
+                          Request Repair
+                        </Button>
+                      </Link>
+                    </div>
+                  )}
+                </TabsContent>
+
+                {/* Invoices Tab */}
+                <TabsContent value="invoices" className="space-y-4">
+                  {isLoadingInvoices ? (
+                    <div className="flex justify-center items-center py-8">
+                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    </div>
+                  ) : invoices && invoices.length > 0 ? (
+                    <div className="rounded-md border overflow-hidden">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Invoice #</TableHead>
+                            <TableHead>Amount</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Date</TableHead>
+                            <TableHead></TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {invoices.map((invoice) => (
+                            <TableRow key={invoice.id}>
+                              <TableCell className="font-medium">INV-{invoice.id.toString().padStart(4, '0')}</TableCell>
+                              <TableCell>{formatPrice(invoice.amount)}</TableCell>
+                              <TableCell>{getInvoiceStatusBadge(invoice.status)}</TableCell>
+                              <TableCell>{new Date(invoice.createdAt).toLocaleDateString()}</TableCell>
+                              <TableCell>
+                                <Button variant="ghost" size="sm" onClick={() => handleViewInvoice(invoice)}>
+                                  View
+                                </Button>
+                                {invoice.status === "unpaid" && (
+                                  <Button variant="outline" size="sm" className="ml-2">
+                                    <DollarSign className="mr-1 h-3 w-3" />
+                                    Pay
+                                  </Button>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <FileText className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">No invoices yet</h3>
+                      <p className="text-gray-600">
+                        Invoices will appear here when you receive them for repair services
+                      </p>
+                    </div>
+                  )}
+                </TabsContent>
+              </Tabs>
             </CardContent>
           </Card>
         </div>
