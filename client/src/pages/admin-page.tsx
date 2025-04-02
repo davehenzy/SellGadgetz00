@@ -5,6 +5,7 @@ import Navbar from "@/components/layout/navbar";
 import Footer from "@/components/layout/footer";
 import LaptopListings from "@/components/admin/laptop-listings";
 import RepairRequests from "@/components/admin/repair-requests";
+import UserManagement from "@/components/admin/user-management";
 import { 
   Card, 
   CardContent, 
@@ -157,6 +158,10 @@ export default function AdminPage() {
                 <Wrench className="mr-2 h-4 w-4" />
                 Repair Requests
               </TabsTrigger>
+              <TabsTrigger value="users" className="flex items-center">
+                <Users className="mr-2 h-4 w-4" />
+                User Management
+              </TabsTrigger>
               <TabsTrigger value="settings" className="flex items-center">
                 <Settings className="mr-2 h-4 w-4" />
                 Settings
@@ -169,6 +174,10 @@ export default function AdminPage() {
 
             <TabsContent value="repairs">
               <RepairRequests />
+            </TabsContent>
+            
+            <TabsContent value="users">
+              <UserManagement />
             </TabsContent>
 
             <TabsContent value="settings">

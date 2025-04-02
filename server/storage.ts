@@ -50,6 +50,7 @@ export interface IStorage {
   // Invoice operations
   getInvoice(id: number): Promise<Invoice | undefined>;
   getInvoicesByUserId(userId: number): Promise<Invoice[]>;
+  getAllInvoices(): Promise<Invoice[]>;
   createInvoice(invoice: InsertInvoice): Promise<Invoice>;
   updateInvoiceStatus(id: number, status: string): Promise<Invoice | undefined>;
   
@@ -268,6 +269,10 @@ export class DatabaseStorage implements IStorage {
 
   async getInvoicesByUserId(userId: number): Promise<Invoice[]> {
     return await this.db.select().from(invoices).where(eq(invoices.userId, userId));
+  }
+  
+  async getAllInvoices(): Promise<Invoice[]> {
+    return await this.db.select().from(invoices);
   }
 
   async createInvoice(insertInvoice: InsertInvoice): Promise<Invoice> {

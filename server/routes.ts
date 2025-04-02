@@ -9,6 +9,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Setup authentication routes
   setupAuth(app);
 
+  // Users Routes
+  app.get("/api/users", async (req, res) => {
+    if (!req.isAuthenticated() || !req.user.isAdmin) {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+    
+    try {
+      const users = await storage.getAllUsers();
+      res.json(users);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch users" });
+    }
+  });
+
   // Laptops Routes
   app.get("/api/laptops", async (req, res) => {
     try {
@@ -209,6 +223,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Invoices Routes
+  app.get("/api/invoices", async (req, res) => {
+    if (!req.isAuthenticated() || !req.user.isAdmin) {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+    
+    try {
+      // This assumes you have an getAllInvoices method in your storage
+      const invoices = await storage.getAllInvoices();
+      res.json(invoices);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch invoices" });
+    }
+  });
+
   app.get("/api/invoices/user", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     
