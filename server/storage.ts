@@ -6,21 +6,14 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { eq, and } from 'drizzle-orm';
 import pg from 'pg';
 import connectPg from 'connect-pg-simple';
-import { scrypt, randomBytes, timingSafeEqual } from "crypto";
-import { promisify } from "util";
+
+// Import hashPassword from auth.ts for consistency
+import { hashPassword } from "./auth";
 
 const { Pool } = pg;
 
 const MemoryStore = createMemoryStore(session);
 const PostgresSessionStore = connectPg(session);
-
-const scryptAsync = promisify(scrypt);
-
-async function hashPassword(password: string) {
-  const salt = randomBytes(16).toString("hex");
-  const buf = (await scryptAsync(password, salt, 64)) as Buffer;
-  return `${buf.toString("hex")}.${salt}`;
-}
 
 // Storage interface for CRUD operations
 export interface IStorage {

@@ -10,16 +10,22 @@ import AdminPage from "@/pages/admin-page";
 import { ProtectedRoute } from "./lib/protected-route";
 import { LiveChatWidget } from "./components/common/live-chat-widget";
 
+// Define the routes - this prevents TypeScript errors with components that might return null
+const AdminRoute = () => <AdminPage />;
+const DashboardRoute = () => <DashboardPage />;
+const SellRoute = () => <SellPage />;
+const RepairRoute = () => <RepairPage />;
+
 function Router() {
   return (
     <Switch>
       <Route path="/" component={HomePage} />
       <Route path="/auth" component={AuthPage} />
-      <ProtectedRoute path="/sell" component={SellPage} />
-      <ProtectedRoute path="/repair" component={RepairPage} />
-      <ProtectedRoute path="/dashboard" component={DashboardPage} />
-      <ProtectedRoute path="/admin" component={AdminPage} adminOnly={true} />
-      <Route component={NotFound} />
+      <ProtectedRoute path="/sell" component={SellRoute} />
+      <ProtectedRoute path="/repair" component={RepairRoute} />
+      <ProtectedRoute path="/dashboard" component={DashboardRoute} />
+      <ProtectedRoute path="/admin" component={AdminRoute} adminOnly={true} />
+      <Route path="/:rest*" component={NotFound} />
     </Switch>
   );
 }

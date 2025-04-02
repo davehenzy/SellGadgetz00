@@ -51,17 +51,22 @@ export default function AdminPage() {
     enabled: !!user?.isAdmin,
   });
 
-  // If not admin, redirect
-  if (user && !user.isAdmin) {
-    navigate("/dashboard");
-    return null;
-  }
-
+  // Check for authentication issues
   if (!user) {
     return (
       <div className="flex justify-center items-center min-h-screen">
         <AlertCircle className="h-8 w-8 text-red-500 mr-2" />
         <span>User not authenticated</span>
+      </div>
+    );
+  }
+  
+  // Admin check - We'll handle redirect in the ProtectedRoute component
+  if (!user.isAdmin) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <AlertCircle className="h-8 w-8 text-red-500 mr-2" />
+        <span>Access denied. Admin privileges required.</span>
       </div>
     );
   }
