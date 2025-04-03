@@ -4,7 +4,8 @@ import { Express } from "express";
 import session from "express-session";
 import { scrypt, timingSafeEqual } from "crypto";
 import { promisify } from "util";
-import { storage, hashPassword } from "./storage";
+import { storage } from "./storage";
+import { hashPassword } from "./db";
 import { User as SelectUser } from "@shared/schema";
 
 declare global {
@@ -16,10 +17,31 @@ declare global {
 const scryptAsync = promisify(scrypt);
 
 export async function comparePasswords(supplied: string, stored: string) {
-  const [hashed, salt] = stored.split(".");
-  const hashedBuf = Buffer.from(hashed, "hex");
-  const suppliedBuf = (await scryptAsync(supplied, salt, 64)) as Buffer;
-  return timingSafeEqual(hashedBuf, suppliedBuf);
+  try {
+    // Split the stored hash into hash and salt components
+    const parts = stored.split(".");
+    if (parts.length !== 2) {
+      console.error("Invalid stored password format");
+      return false;
+    }
+    
+    const [hashed, salt] = parts;
+    
+    // Generate hash from supplied password
+    const suppliedBuf = (await scryptAsync(supplied, salt, 64)) as Buffer;
+    const hashedBuf = Buffer.from(hashed, "hex");
+    
+    // Compare the two buffers
+    if (hashedBuf.length !== suppliedBuf.length) {
+      console.error(`Buffer length mismatch: ${hashedBuf.length} vs ${suppliedBuf.length}`);
+      return false;
+    }
+    
+    return timingSafeEqual(hashedBuf, suppliedBuf);
+  } catch (error) {
+    console.error("Error comparing passwords:", error);
+    return false;
+  }
 }
 
 export function setupAuth(app: Express) {
